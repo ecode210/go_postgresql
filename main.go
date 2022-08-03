@@ -1,19 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"go_postgresql/controller"
 	"os"
-	"time"
 )
 
 func main(){
-	fmt.Println(time.Now().Add(-time.Hour * 140160).Unix())
-
 	router := gin.Default()
 	controller.Validate = validator.New()
+
+	// Registering custom validators
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		err := v.RegisterValidation("above_age", controller.AboveAge)
+		if err != nil {
+			return
+		}
+	}
 
 	router.GET("", controller.Home)
 

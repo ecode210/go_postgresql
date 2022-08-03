@@ -27,23 +27,13 @@ func GetAllUsers(c *gin.Context){
 }
 
 func RegisterUser(c *gin.Context){
-	// Binds input from request body to User struct
 	var input model.User
-	err := c.ShouldBindJSON(&input)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": http.StatusBadRequest,
-			"error": true,
-			"message": err.Error(),
-		})
-		return
-	}
 
 	// Generates UUID
 	input.ID = uuid.New().String()
 
-	// Validates User struct from validate tags
-	err = Validate.Struct(input)
+	// Binds & Validates input from request body to User struct
+	err := c.ShouldBindJSON(&input)
 	if err != nil {
 		errorMessage := ""
 		for _, err := range err.(validator.ValidationErrors) {
@@ -54,11 +44,17 @@ func RegisterUser(c *gin.Context){
 			case "FullName":
 				errorMessage = errorMessage + "Full Name needs to be greater than 5 characters and less than 30 characters. "
 				break
+			case "DateOfBirth":
+				errorMessage = errorMessage + "User is below 16 years. "
+				break
 			case "PhoneNumber":
 				errorMessage = errorMessage + "Invalid Phone Number (Try adding country code e.g '+234'). "
 				break
 			case "Email":
 				errorMessage = errorMessage + "Invalid Email address. "
+				break
+			case "Password":
+				errorMessage = errorMessage + "Password too short/long. "
 				break
 			}
 		}
@@ -69,18 +65,6 @@ func RegisterUser(c *gin.Context){
 			"status": http.StatusBadRequest,
 			"error": true,
 			"message": strings.Trim(errorMessage, " "),
-		})
-		return
-	}
-
-	// Checks if Date of birth is greater than 16 years ago
-	timeValidator := fmt.Sprintf("lte=%v", time.Now().Add(-time.Hour * 140160).Unix())
-	err = Validate.Var(input.DateOfBirth, timeValidator)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": http.StatusBadRequest,
-			"error": true,
-			"message": "User is below 16 years.",
 		})
 		return
 	}
@@ -108,14 +92,28 @@ func RegisterUser(c *gin.Context){
 }
 
 func LoginUser(c *gin.Context){
-	// Binds input from request body to UserLogin struct
+	// Binds & Validates input from request body to UserLogin struct
 	var input model.UserLogin
 	err := c.ShouldBindJSON(&input)
 	if err != nil {
+		errorMessage := ""
+		for _, err := range err.(validator.ValidationErrors) {
+			switch err.Field() {
+			case "Email":
+				errorMessage = errorMessage + "Invalid Email address. "
+				break
+			case "Password":
+				errorMessage = errorMessage + "Invalid Password. "
+				break
+			}
+		}
+		if errorMessage == "" {
+			errorMessage = err.(validator.ValidationErrors).Error()
+		}
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": http.StatusBadRequest,
 			"error": true,
-			"message": err.Error(),
+			"message": strings.Trim(errorMessage, " "),
 		})
 		return
 	}

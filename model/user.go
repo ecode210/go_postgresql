@@ -1,17 +1,17 @@
 package model
 
 type User struct {
-	ID          string `json:"id" validate:"required,uuid"`
-	FullName    string `json:"full_name" binding:"required" validate:"gte=5,lte=30"`
-	DateOfBirth int64  `json:"date_of_birth" binding:"required"`
-	PhoneNumber string `json:"phone_number" binding:"required"  validate:"e164"`
-	Email       string `json:"email" binding:"required" validate:"email"`
-	Password    string `json:"password" binding:"required" validate:"gte=8,lte=30"`
+	ID          string `json:"id"`
+	FullName    string `json:"full_name" binding:"required,gte=5,lte=30"`
+	DateOfBirth int64  `json:"date_of_birth" binding:"required,above_age"`
+	PhoneNumber string `json:"phone_number" binding:"required,e164"`
+	Email       string `json:"email" binding:"required,email"`
+	Password    string `json:"password" binding:"required,gte=8,lte=30"`
 }
 
 type UserLogin struct {
-	Email       string `json:"email" binding:"required" validate:"email"`
-	Password    string `json:"password" binding:"required" validate:"gte=8,lte=30"`
+	Email       string `json:"email" binding:"required,email"`
+	Password    string `json:"password" binding:"required,gte=8,lte=30"`
 }
 
 type UserUpdate struct {
