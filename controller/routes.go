@@ -14,6 +14,10 @@ import (
 
 var Validate *validator.Validate
 
+func Home(c *gin.Context){
+	c.String(http.StatusOK, "Welcome to Go Postgresql")
+}
+
 func GetAllUsers(c *gin.Context){
 	c.JSON(http.StatusOK, gin.H{
 		"status": http.StatusOK,

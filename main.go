@@ -15,6 +15,8 @@ func main(){
 	router := gin.Default()
 	controller.Validate = validator.New()
 
+	router.GET("", controller.Home)
+
 	apiRoutes := router.Group("/api")
 
 	apiRoutes.GET("/all", controller.GetAllUsers)
