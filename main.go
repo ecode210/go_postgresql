@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"go_postgresql/controller"
+	"os"
 	"time"
 )
 
@@ -22,8 +23,12 @@ func main(){
 	apiRoutes.PATCH("/update/:id", controller.UpdateDetails)
 	apiRoutes.DELETE("/delete/:id", controller.DeleteUser)
 
-	err := router.Run(":1234")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	err := router.Run(":" + port)
 	if err != nil {
-		panic(any("Server run error!"))
+		return
 	}
 }
