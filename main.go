@@ -4,11 +4,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"go_postgresql/config"
 	"go_postgresql/controller"
 	"os"
 )
 
-func main(){
+func main() {
+	config.ConnectDB()
 	router := gin.Default()
 	controller.Validate = validator.New()
 
@@ -16,7 +18,7 @@ func main(){
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		err := v.RegisterValidation("above_age", controller.AboveAge)
 		if err != nil {
-			return
+			panic(any("Unable to register custom validator"))
 		}
 	}
 

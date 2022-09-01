@@ -1,12 +1,14 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
+	"go_postgresql/config"
 	"go_postgresql/model"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 	"net/http"
 	"strings"
 	"time"
@@ -19,18 +21,35 @@ func Home(c *gin.Context){
 }
 
 func GetAllUsers(c *gin.Context){
+	var allUsers []gin.H
+	var users []model.User
+	err := config.DB.Find(&users).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err,
+		})
+		return
+	}
+
+	for i := range users{
+		allUsers = append(allUsers, gin.H{
+			"full_name": users[i].FullName,
+			"email": users[i].Email,
+			"phone_number": users[i].PhoneNumber,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": http.StatusOK,
-		"error": false,
-		"data": model.AllUsers,
+		"error":  false,
+		"data":   allUsers,
 	})
 }
 
 func RegisterUser(c *gin.Context){
 	var input model.User
-
-	// Generates UUID
-	input.ID = uuid.New().String()
 
 	// Binds & Validates input from request body to User struct
 	err := c.ShouldBindJSON(&input)
@@ -38,9 +57,6 @@ func RegisterUser(c *gin.Context){
 		errorMessage := ""
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.Field() {
-			case "ID":
-				errorMessage = errorMessage + "UUID error! Please Try again later. "
-				break
 			case "FullName":
 				errorMessage = errorMessage + "Full Name needs to be greater than 5 characters and less than 30 characters. "
 				break
@@ -69,6 +85,26 @@ func RegisterUser(c *gin.Context){
 		return
 	}
 
+	// Checks if a User with the same email already exists
+	var existingUser model.User
+	err = config.DB.First(&existingUser, "email = ?", input.Email).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err.Error(),
+		})
+		return
+	}
+	if existingUser.Email != "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": "User already exists",
+		})
+		return
+	}
+
 	// Hashes Password
 	password, err := bcrypt.GenerateFromPassword([]byte(input.Password), 8)
 	if err != nil {
@@ -81,8 +117,17 @@ func RegisterUser(c *gin.Context){
 	}
 	input.Password = string(password)
 
-	// Adds New User to Local DB
-	model.AllUsers = append(model.AllUsers, input)
+	// Adds New User to Postgresql DB
+	err = config.DB.Create(&input).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err.Error(),
+		})
+		fmt.Println("Error:", err)
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": http.StatusOK,
@@ -118,8 +163,19 @@ func LoginUser(c *gin.Context){
 		return
 	}
 
+	var allUsers []model.User
+	err = config.DB.Find(&allUsers).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	// Checks if local DB is empty
-	if model.AllUsers == nil {
+	if len(allUsers) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": http.StatusBadRequest,
 			"error": true,
@@ -129,16 +185,16 @@ func LoginUser(c *gin.Context){
 	}
 
 	// Verifies Login credentials
-	for i := range model.AllUsers {
-		if model.AllUsers[i].Email == input.Email {
-			err = bcrypt.CompareHashAndPassword([]byte(model.AllUsers[i].Password), []byte(input.Password))
+	for i := range allUsers {
+		if allUsers[i].Email == input.Email {
+			err = bcrypt.CompareHashAndPassword([]byte(allUsers[i].Password), []byte(input.Password))
 			if err == nil {
 				c.JSON(http.StatusOK, gin.H{
 					"status": http.StatusOK,
 					"error": false,
 					"message": "Logged in!",
 					"data": gin.H{
-						"id": model.AllUsers[i].ID,
+						"id": allUsers[i].ID,
 					},
 				})
 				return
@@ -173,19 +229,22 @@ func UpdateDetails(c *gin.Context){
 		return
 	}
 
-	// Finds index of user in local DB from :id in endpoint URL
-	userIndex := -1
-	for i := range model.AllUsers{
-		if model.AllUsers[i].ID == c.Param("id") {
-			userIndex = i
-			break
-		}
-	}
-	if userIndex == -1 {
+	// Finds user in database
+	var user model.User
+	err = config.DB.First(&user, "id = ?", c.Param("id")).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": http.StatusBadRequest,
 			"error": true,
 			"message": "User not found",
+		})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err.Error(),
 		})
 		return
 	}
@@ -241,7 +300,9 @@ func UpdateDetails(c *gin.Context){
 		}
 	}
 
-	model.AllUsers[userIndex].UpdateUser(input)
+	// Saves new updates to database
+	user.UpdateUser(input)
+	config.DB.Save(&user)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": http.StatusOK,
@@ -252,14 +313,9 @@ func UpdateDetails(c *gin.Context){
 
 func DeleteUser(c *gin.Context) {
 	// Finds index of user in local DB from :id in endpoint URL
-	userIndex := -1
-	for i := range model.AllUsers{
-		if model.AllUsers[i].ID == c.Param("id") {
-			userIndex = i
-			break
-		}
-	}
-	if userIndex == -1 {
+	var user model.User
+	err := config.DB.First(&user, "id = ?", c.Param("id")).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": http.StatusBadRequest,
 			"error": true,
@@ -267,13 +323,24 @@ func DeleteUser(c *gin.Context) {
 		})
 		return
 	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err.Error(),
+		})
+		return
+	}
 
-	// Copies the Users below the current User and pastes them into the local DB starting from the current User index
-	copy(model.AllUsers[userIndex:], model.AllUsers[userIndex+1:])
-	// Sets the last User in the local DB to empty because it is a duplicate of the second-to-the-last User
-	model.AllUsers[len(model.AllUsers)-1] = model.User{}
-	// Truncates the local DB to remove empty entries
-	model.AllUsers = model.AllUsers[:len(model.AllUsers)-1]
+	err = config.DB.Delete(&user).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": http.StatusBadRequest,
+			"error": true,
+			"message": err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": http.StatusOK,

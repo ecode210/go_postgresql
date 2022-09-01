@@ -1,17 +1,19 @@
 package model
 
+import "gorm.io/gorm"
+
 type User struct {
-	ID          string `json:"id"`
-	FullName    string `json:"full_name" binding:"required,gte=5,lte=30"`
-	DateOfBirth int64  `json:"date_of_birth" binding:"required,above_age"`
-	PhoneNumber string `json:"phone_number" binding:"required,e164"`
-	Email       string `json:"email" binding:"required,email"`
-	Password    string `json:"password" binding:"required,gte=8,lte=30"`
+	gorm.Model
+	FullName    string `json:"full_name,omitempty" binding:"required,gte=5,lte=30"`
+	DateOfBirth int64  `json:"date_of_birth,omitempty" binding:"required,above_age"`
+	PhoneNumber string `json:"phone_number,omitempty" binding:"required,e164"`
+	Email       string `json:"email,omitempty" binding:"required,email"`
+	Password    string `json:"password,omitempty" binding:"required,gte=8,lte=30"`
 }
 
 type UserLogin struct {
-	Email       string `json:"email" binding:"required,email"`
-	Password    string `json:"password" binding:"required,gte=8,lte=30"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,gte=8,lte=30"`
 }
 
 type UserUpdate struct {
